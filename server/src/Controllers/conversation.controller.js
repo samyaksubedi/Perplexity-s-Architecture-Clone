@@ -58,4 +58,18 @@ const purplexity_ask = async (req, res) => {
   }
 };
 
-export { purplexity_ask };
+// Ask follow up questions
+const purplexity_ask_followup = async (req, res) => {};
+
+// get past conversations
+const getConversations = async (req, res) => {};
+
+// get past conversation
+const getConversation = async (req, res) => {};
+
+export {
+  purplexity_ask,
+  purplexity_ask_followup,
+  getConversations,
+  getConversation,
+};
