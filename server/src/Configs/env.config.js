@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
-const loadEnv = () => {
+const loadEnv = async () => {
   console.log('ENV loaded successfully');
 };
 

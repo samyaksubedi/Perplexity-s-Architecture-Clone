@@ -14,10 +14,12 @@
     "@langchain/core": "^1.1.46",
     "@langchain/openai": "^1.4.5",
     "@langchain/tavily": "^1.2.0",
+    "@prisma/client": "^6.19.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "prisma": "^6.19.3"
   }
 }

@@ -3,7 +3,7 @@ import { signIn, signUp } from '../Controllers/auth.controller.js';
 
 const router = express.Router();
 
-router.post('/ask', purplexity_ask);
-router.post('/followup', purplexity_ask_followup);
+router.post('/signIn', signIn);
+router.post('/signUp', signUp);
 
 export default router;
