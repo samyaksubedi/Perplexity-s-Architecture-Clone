@@ -1,7 +1,4 @@
 -- CreateEnum
-CREATE TYPE "AuthProvider" AS ENUM ('Github', 'Google');
-
--- CreateEnum
 CREATE TYPE "MessageRole" AS ENUM ('User', 'Assistant');
 
 -- CreateTable
@@ -9,7 +6,6 @@ CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "authProvider" "AuthProvider" NOT NULL,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );

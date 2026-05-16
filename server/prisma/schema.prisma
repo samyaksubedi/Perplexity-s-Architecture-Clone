@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // UnComment below 2 lines before migrating to db 
+  //! UnComment below 2 lines before migrating to db and generating types to ts ..  
   // url       = env("DATABASE_URL")
   // directUrl = env("DIRECT_URL")
 }
@@ -13,16 +13,9 @@ datasource db {
 
 model User {
   id            String         @id @default(uuid())
-  supabaseId    String         @unique
   name          String
   email         String         @unique
-  authProvider  AuthProvider
   conversations Conversation[]
-}
-
-enum AuthProvider {
-  Github
-  Google
 }
 
 model Conversation {
