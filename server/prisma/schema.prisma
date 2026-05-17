@@ -12,10 +12,19 @@ datasource db {
 // Defining the Schemas 
 
 model User {
-  id            String         @id @default(uuid())
-  name          String
-  email         String         @unique
-  conversations Conversation[]
+  id                            String         @id @default(uuid())
+  name                          String
+  email                         String         @unique
+  conversations                 Conversation[]
+  password                      String
+  // Verification
+  isVerified                    Boolean        @default(false)
+  emailVerificationToken        String?
+  emailVerificationTokenExpires DateTime?
+
+  // Reset Password
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
 }
 
 model Conversation {
