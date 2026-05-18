@@ -1,19 +1,21 @@
 import { envVariables } from '../Configs/env.config.js';
 import { sendEmail } from '../UTILS/EMAIL/email.util.js';
 
-const sendWelcomeEmail = async ({ to, name, verificationToken }) => {
-  const subject = 'Welcome to Purplexity AI — Please Verify Your Email';
-  //! Temp for development
-  const verificationUrl = `${envVariables.CLIENT_URL}/api/auth/verify/${verificationToken}`;
-  // const verificationUrl = `${envVariables.CLIENT_URL}/verify/${verificationToken}`;
+// ─── Shared Styles & Layout ───────────────────────────────────────────────────
 
-  const html = `
+const getEmailShell = ({
+  name,
+  verificationUrl,
+  headline,
+  introParagraph,
+}) => ({
+  html: `
     <!DOCTYPE html>
     <html lang="en">
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>Welcome</title>
+        <title>Purplexity AI</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f7; }
@@ -44,11 +46,8 @@ const sendWelcomeEmail = async ({ to, name, verificationToken }) => {
           </div>
 
           <div class="body">
-            <h2>Hey ${name}, welcome aboard! 👋</h2>
-            <p>
-              We're thrilled to have you join Purplexity AI. One last step — 
-              please verify your email address to activate your account.
-            </p>
+            <h2>${headline}</h2>
+            <p>${introParagraph}</p>
 
             <div class="verify-box">
               <p>Click the button below to confirm your email. This link expires in <strong>24 hours</strong>.</p>
@@ -63,7 +62,7 @@ const sendWelcomeEmail = async ({ to, name, verificationToken }) => {
 
             <p>
               If you didn't create an account with us, you can safely ignore this email.
-              For any questions, reach out at 
+              For any questions, reach out at
               <a href="mailto:${envVariables.GMAIL_USER}" style="color:#6c3fc5;">${envVariables.GMAIL_USER}</a>.
             </p>
             <p>See you on the other side,<br/><strong>The Purplexity AI Team</strong></p>
@@ -79,11 +78,50 @@ const sendWelcomeEmail = async ({ to, name, verificationToken }) => {
         </div>
       </body>
     </html>
-  `;
+  `,
+  text: `Hey ${name}, ${introParagraph} ${verificationUrl} — This link expires in 24 hours.`,
+});
 
-  const text = `Hey ${name}, welcome to Purplexity AI! Please verify your email to activate your account: ${verificationUrl} — This link expires in 24 hours.`;
+// ─── Email Functions ──────────────────────────────────────────────────────────
 
-  return sendEmail({ to, subject, html, text });
+const sendWelcomeEmail = async ({ to, name, verificationToken }) => {
+  //! Temp for development
+  const verificationUrl = `${envVariables.CLIENT_URL}/api/auth/verify/${verificationToken}`;
+  // const verificationUrl = `${envVariables.CLIENT_URL}/verify/${verificationToken}`;
+
+  const { html, text } = getEmailShell({
+    name,
+    verificationUrl,
+    headline: `Hey ${name}, welcome aboard! 👋`,
+    introParagraph: `We're thrilled to have you join Purplexity AI. One last step — please verify your email address to activate your account.`,
+  });
+
+  return sendEmail({
+    to,
+    subject: 'Welcome to Purplexity AI — Please Verify Your Email',
+    html,
+    text,
+  });
 };
 
-export { sendWelcomeEmail };
+const sendResendVerificationEmail = async ({ to, name, verificationToken }) => {
+  //! Temp for development
+  const verificationUrl = `${envVariables.CLIENT_URL}/api/auth/verify/${verificationToken}`;
+  // const verificationUrl = `${envVariables.CLIENT_URL}/verify/${verificationToken}`;
+
+  const { html, text } = getEmailShell({
+    name,
+    verificationUrl,
+    headline: `Hey ${name}, here's your new verification link`,
+    introParagraph: `You requested a new verification email. Use the link below to verify your account.`,
+  });
+
+  return sendEmail({
+    to,
+    subject: 'Purplexity AI — New Verification Link',
+    html,
+    text,
+  });
+};
+
+export { sendWelcomeEmail, sendResendVerificationEmail };

@@ -1,67 +1,34 @@
-import jwt from 'jsonwebtoken';
+import { envVariables } from '../Configs/env.config.js';
 import { ApiError } from '../UTILS/API/error.api.js';
+import jwt from 'jsonwebtoken';
 
-export const authenticateUser = async (req, res, next) => {
+const authenticateUser = async (req, res, next) => {
   try {
-    const token = req?.cookies?.token;
-    if (!token) {
-      return res
-        .status(401)
-        .json(
-          new ApiError(
-            401,
-            'Unauthorized - No token provided',
-            [],
-            'No token provided. Please login to access this resource.',
-          ),
-        );
-    }
-    // Un-signing JWT token ;
+    // 1. Get Authorization header
+    const authHeader = req.headers.authorization;
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded) {
-      return res
-        .status(401)
-        .json(
-          new ApiError(
-            401,
-            'Unauthorized - Invalid token',
-            [],
-            'The provided token is invalid. Please login again.',
-          ),
-        );
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json(new ApiError(401, 'No token provided'));
     }
 
-    const user = await User.findById(decoded.userId).select(
-      '-password -emailVerificationToken -emailVerificationTokenExpires -resetPasswordToken -resetPasswordExpires',
-    );
-    if (!user) {
-      return res
-        .status(404)
-        .json(
-          new ApiError(
-            404,
-            'User Not Found',
-            [],
-            'No user found with the provided token.',
-          ),
-        );
-    }
-    req.user = user;
-    console.log('Authenticated User:', user);
+    // 2. Extract token
+    const token = authHeader.split(' ')[1];
 
+    // 3. Verify token
+    const decoded = jwt.verify(token, envVariables.ACCESS_TOKEN_SECRET);
+
+    // 4. Attach user info to request
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+    };
+
+    // 5. Continue
     next();
   } catch (error) {
-    console.error('Authentication Error:', error);
-    return res
-      .status(500)
-      .json(
-        new ApiError(
-          500,
-          'Internal Server Error - Authentication Failed',
-          [],
-          'An error occurred while authenticating the user.',
-        ),
-      );
+    // console.error(error.message);
+    return res.status(401).json(new ApiError(401, 'Invalid or expired token'));
   }
 };
+
+export { authenticateUser };

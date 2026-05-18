@@ -5,5 +5,16 @@ const signUpReqBodySchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 });
+const signInReqBodySchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+const resendVerificationTokenReqBodySchema = z.object({
+  email: z.string().email(),
+});
 
-export { signUpReqBodySchema };
+export {
+  signUpReqBodySchema,
+  signInReqBodySchema,
+  resendVerificationTokenReqBodySchema,
+};

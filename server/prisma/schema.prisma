@@ -21,10 +21,14 @@ model User {
   isVerified                    Boolean        @default(false)
   emailVerificationToken        String?
   emailVerificationTokenExpires DateTime?
-
   // Reset Password
-  resetPasswordToken   String?
-  resetPasswordExpires DateTime?
+  resetPasswordToken            String?
+  resetPasswordExpires          DateTime?
+  // On Login - For now only supports a single device login 
+  refreshToken                  String?
+  refreshTokenExpires           DateTime?
+  // User CreatedAT :
+  createdAt                     DateTime       @default(now())
 }
 
 model Conversation {

@@ -1,9 +1,16 @@
 import { prisma } from '../Configs/postgress.config.js';
-import { sendWelcomeEmail } from '../Services/email.service.js';
+import {
+  sendResendVerificationEmail,
+  sendWelcomeEmail,
+} from '../Services/email.service.js';
 import { ApiError } from '../UTILS/API/error.api.js';
 import { ApiResponse } from '../UTILS/API/response.api.js';
-import { hashPassword } from '../UTILS/hash.util.js';
-import { generateVerificationToken } from '../UTILS/token.util.js';
+import { comparePassword, hashPassword } from '../UTILS/hash.util.js';
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  generateVerificationToken,
+} from '../UTILS/token.util.js';
 
 // const testGM = async (req, res) => {
 //   const { mail, subject, text } = req.body;
@@ -66,7 +73,7 @@ const signUp = async (req, res) => {
         ),
       );
   } catch (error) {
-    console.error(error.message);
+    console.error('Internal Server Error at /signUp ', error.message);
     res.status(500).json(new ApiError(500, 'Internal Server Error in /signUp'));
   }
 };
@@ -109,12 +116,12 @@ Return 200 → "Email verified, you can now login"`;
       .status(200)
       .json(new ApiResponse(200, {}, 'User verified successfully'));
   } catch (error) {
-    console.error(error.message);
+    console.error('Internal Serve Error at /verify ', error.message);
     res.status(500).json(new ApiError(500, 'Internal Server Error at /verify'));
   }
 };
 
-const resendVerificationToken = (req, res) => {
+const resendVerificationToken = async (req, res) => {
   `POST /api/auth/resend-verification
 User submits email
         ↓
@@ -129,6 +136,58 @@ Update user → { emailVerificationToken: newToken, emailVerificationTokenExpire
 Send email with new link → /api/auth/verify/<newToken>
         ↓
 Return 200 → "Verification email resent"`;
+
+  try {
+    const { email } = req.body;
+    const user = await prisma.user.findUnique({
+      where: {
+        email: email,
+      },
+    });
+    if (!user) {
+      return res
+        .status(404)
+        .json(new ApiError(404, 'User not found with the email'));
+    }
+    const isVerified = user.isVerified;
+    if (isVerified) {
+      return res
+        .status(400)
+        .json(new ApiError(400, 'User is already Verified'));
+    }
+    const { token, expires } = generateVerificationToken();
+    await prisma.user.update({
+      where: {
+        email: email,
+      },
+      data: {
+        emailVerificationToken: token,
+        emailVerificationTokenExpires: expires,
+      },
+    });
+    await sendResendVerificationEmail({
+      name: user.name,
+      to: email,
+      verificationToken: token,
+    });
+    res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          {},
+          'Verification email resent, Check your email ',
+        ),
+      );
+  } catch (error) {
+    console.error(
+      'Internal Server Error at /resend-verification ',
+      error.message,
+    );
+    res
+      .status(500)
+      .json(new ApiError(500, 'Internal Server Error at /resend-verification'));
+  }
 };
 const signIn = async (req, res) => {
   `User submits (email, password)
@@ -139,11 +198,90 @@ Check isVerified === true → if false → "Please verify your email first"
         ↓
 bcrypt.compare(password, user.password) → if false → 401
         ↓
-Sign JWT → jwt.sign({ userId, email }, SECRET, { expiresIn: '7d' })
+Generate accessToken (JWT, expires in 15min)
         ↓
-Set cookie → res.cookie('token', jwt, { httpOnly: true, secure: true, sameSite: 'strict' })
+Generate refreshToken (random string, expires in 30 days)
         ↓
-Return 200 → user data (without password)`;
+Save refreshToken + refreshTokenExpires in DB (overwrites old one → single device login)
+        ↓
+Set cookie → res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: 'strict' })
+        ↓
+Return 200 → accessToken + user data (without password)
+        ↓
+Client uses accessToken for API requests (Authorization: Bearer <accessToken>)
+        ↓
+When accessToken expires → client sends POST /auth/refresh with refreshToken cookie
+        ↓
+Server checks refreshToken in DB + verifies refreshTokenExpires
+        ↓
+If valid → issue new accessToken (user stays logged in silently)
+        ↓
+If refreshToken expired → user must log in again`;
+  try {
+    const { email, password } = req.body;
+
+    // 1. Find user
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json(new ApiError(401, 'Invalid credentials'));
+    }
+
+    // 2. Check if verified
+    if (!user.isVerified) {
+      return res
+        .status(403)
+        .json(new ApiError(403, 'Please verify your email first'));
+    }
+
+    // 3. Compare password
+    const isMatch = await comparePassword(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json(new ApiError(401, 'Invalid credentials'));
+    }
+
+    // 4. Generate tokens
+    const accessToken = generateAccessToken(user);
+    const { token: refreshToken, expires: refreshTokenExpires } =
+      generateRefreshToken();
+
+    // 5. Save refresh token in DB (single device → overwrite)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        refreshToken,
+        refreshTokenExpires,
+      },
+    });
+
+    // 6. Set refresh token in cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: false, // set false in dev if not using HTTPS
+      sameSite: 'strict',
+      expires: refreshTokenExpires,
+    });
+
+    // 7. Return response (NO password)
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          accessToken,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+          },
+        },
+        'User loggedIn successfully',
+      ),
+    );
+  } catch (error) {
+    console.error('Internal Server Error at /signIn  :', error.message);
+    return res
+      .status(500)
+      .json(new ApiError(500, 'Internal Server Error at /signIn'));
+  }
 };
 
 const logoutUser = async (req, res) => {
@@ -152,6 +290,47 @@ const logoutUser = async (req, res) => {
 res.clearCookie('token')
         ↓
 Return 200 → "Logged out"`;
+  try {
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: false, // set false in dev if not using HTTPS
+      sameSite: 'strict',
+    });
+    res
+      .status(200)
+      .json(new ApiResponse(200, {}, 'User logged Out successfully'));
+  } catch (error) {
+    console.error('Internal Server Error at /logout ', error.message);
+    res.status(500).json(new ApiError(500, 'Internal Server Error at /logout'));
+  }
 };
 
-export { signUp, resendVerificationToken, verifyUser, signIn, logoutUser };
+const refresh = async (req, res) => {
+  `Client sends POST /auth/refresh (refreshToken is automatically sent via HTTP-only cookie)
+        ↓
+Extract refreshToken from req.cookies → if not present → 401
+        ↓
+Find user by refreshToken in DB → if not found → 401 (invalid session)
+        ↓
+Check refreshTokenExpires > current time → if expired → 401 (session expired, login required)
+        ↓
+(Optional but recommended) Verify token integrity if using hashed tokens
+        ↓
+Generate new accessToken (JWT, expires in 15min)
+        ↓
+(Optional advanced) Generate new refreshToken and update DB (token rotation)
+        ↓
+Return 200 → new accessToken
+        ↓
+Client replaces old accessToken and continues making API requests
+        ↓
+User never notices unless refreshToken is expired`;
+};
+export {
+  signUp,
+  resendVerificationToken,
+  verifyUser,
+  signIn,
+  logoutUser,
+  refresh,
+};
