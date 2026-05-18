@@ -13,7 +13,7 @@ import {
   signUpReqBodySchema,
   signInReqBodySchema,
   resendVerificationTokenReqBodySchema,
-} from '../Schemas/user.schema.js';
+} from '../Schemas/auth.schema.js';
 
 const router = express.Router();
 router.get('/', (req, res) => {

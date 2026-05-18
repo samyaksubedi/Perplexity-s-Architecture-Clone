@@ -325,6 +325,39 @@ Return 200 → new accessToken
 Client replaces old accessToken and continues making API requests
         ↓
 User never notices unless refreshToken is expired`;
+  try {
+    const { refreshToken } = req.cookies;
+    if (!refreshToken) {
+      return res
+        .status(400)
+        .json(new ApiError(400, 'refreshToken is missing in cookies !'));
+    }
+    const user = await prisma.user.findFirst({
+      where: {
+        refreshToken: refreshToken,
+        refreshTokenExpires: {
+          gt: new Date(),
+        },
+      },
+    });
+    if (!user) {
+      return res
+        .status(400)
+        .json(
+          new ApiError(
+            400,
+            'Invalid or Expired refreshToken , Please login again !',
+          ),
+        );
+    }
+    const accessToken = generateAccessToken(user);
+    return res.status(200).json(new ApiResponse(200, { accessToken }));
+  } catch (error) {
+    console.error('Internal Server Error at /refresh ', error.message);
+    return res
+      .status(500)
+      .json(new ApiError(400, 'Internal Server Error at /refresh'));
+  }
 };
 export {
   signUp,
