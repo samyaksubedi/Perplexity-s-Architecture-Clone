@@ -3,8 +3,9 @@ import { sendEmail } from '../UTILS/EMAIL/email.util.js';
 
 const sendWelcomeEmail = async ({ to, name, verificationToken }) => {
   const subject = 'Welcome to Purplexity AI — Please Verify Your Email';
-
-  const verificationUrl = `${envVariables.CLIENT_URL}/verify/${verificationToken}`;
+  //! Temp for development
+  const verificationUrl = `${envVariables.CLIENT_URL}/api/auth/verify/${verificationToken}`;
+  // const verificationUrl = `${envVariables.CLIENT_URL}/verify/${verificationToken}`;
 
   const html = `
     <!DOCTYPE html>

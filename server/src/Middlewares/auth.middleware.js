@@ -1,5 +1,5 @@
-
 import jwt from 'jsonwebtoken';
+import { ApiError } from '../UTILS/API/error.api.js';
 
 export const authenticateUser = async (req, res, next) => {
   try {
