@@ -2,7 +2,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { envVariables } from './env.config.js';
 
 const llm = new ChatOpenAI({
-  model: 'gpt-4o',
+  model: 'gpt-4o-mini',
   temperature: 0,
   //   maxTokens: undefined,
   //   timeout: undefined,

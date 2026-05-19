@@ -2,7 +2,7 @@ import { TavilySearch } from '@langchain/tavily';
 import { envVariables } from '../Configs/env.config.js';
 
 const tavilySearch = new TavilySearch({
-  maxResults: 5,
+  maxResults: 3,
   topic: 'general',
   // includeAnswer: false,
   // includeRawContent: false,
@@ -16,6 +16,11 @@ const tavilySearch = new TavilySearch({
 });
 const searchWeb = async (userQuery) => {
   return await tavilySearch.invoke({ query: userQuery });
+};
+
+const parallelSearchWeb = async (queries) => {
+  const searchPromises = queries.map((query) => tavilySearch.invoke({ query }));
+  return await Promise.all(searchPromises);
 };
 
 // console.log(await searchWeb('New PM of Nepal'));
@@ -69,4 +74,4 @@ const searchWeb = async (userQuery) => {
 //   response_time: 0.02,
 //   request_id: '667a853d-79e4-44d7-bebf-85aedc9cb1f8',
 // };
-export { searchWeb };
+export { searchWeb, parallelSearchWeb };

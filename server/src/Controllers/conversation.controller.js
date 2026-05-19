@@ -1,75 +1,95 @@
 import { llm } from '../Configs/llm.config.js';
 import { prompt } from '../Prompts/conversation.prompt.js';
-import { searchWeb } from '../Services/websearch.service.js';
+import { parallelSearchWeb } from '../Services/websearch.service.js';
 import { ApiError } from '../UTILS/API/error.api.js';
 import { ApiResponse } from '../UTILS/API/response.api.js';
 import { JsonOutputParser } from '@langchain/core/output_parsers';
+import { redis } from '../Configs/redis.config.js';
+import { generateCacheKey } from '../Services/redis.service.js';
 
-const parser = new JsonOutputParser(); // since my prompt returns { answer, followUps }
+const parser = new JsonOutputParser();
 
-const purplexity_ask = async (req, res) => {
+const ask = async (req, res) => {
   try {
-    // Get the query from the user
-    const query = req.body?.query;
+    const { query } = req.body;
     if (!query) {
       return res.status(400).json(new ApiError(400, 'query is required'));
     }
 
-    //   make sure user has access/credits to hit the endpoint
-    //   check if we have web search indexed for a similar query
-    // if not do some web search to gather sources
-    const webSearchResults = await searchWeb(query);
-    // console.log(webSearchResults);
+    // ✅ STEP 1: Check Redis cache first
+    const cacheKey = generateCacheKey(query);
+    const cachedResponse = await redis.get(cacheKey);
+    if (cachedResponse) {
+      console.log('Cache hit ✅ returning cached response');
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            JSON.parse(cachedResponse),
+            'AI responded successfully (cached)',
+          ),
+        );
+    }
+    console.log('Cache miss ❌ running full pipeline');
 
-    // send back sources as links in the response
-    const sources = []; // List of URLs
-    webSearchResults['results'].forEach((result) => {
-      sources.push(result['url']);
+    // STEP 2: Generate sub queries
+    const subQueriesRawResponse = await llm.invoke(
+      `Break down the following query into exactly 3 specific sub-queries for web search.
+
+Rules:
+- Return ONLY a raw JSON array of 3 strings
+- No markdown, no code fences, no explanation, no preamble
+- Each sub-query should be specific and searchable
+
+Example output:
+["sub-query 1", "sub-query 2", "sub-query 3"]
+
+Query: ${query}`,
+    );
+    const subQueries = await parser.invoke(subQueriesRawResponse);
+    console.log('Sub-queries for web search:', subQueries);
+
+    // STEP 3: Parallel web search
+    const parallelWebSearchResults = await parallelSearchWeb(subQueries);
+
+    // STEP 4: Extract + deduplicate sources and contents
+    const sources = new Set();
+    const webContents = new Set();
+    parallelWebSearchResults.forEach((webSearchResults) => {
+      webSearchResults['results'].forEach((result) => {
+        sources.add(result['url']);
+        webContents.add(result['content']);
+      });
     });
+    const sourcesArray = [...sources];
+    const webContentsArray = [...webContents].join('\n\n---\n\n');
 
-    //   do some context engineering on the prompt + web search responses
-    // build the chain once — prompt | llm | parser
+    // STEP 5: Hit the LLM
     const chain = prompt.pipe(llm).pipe(parser);
-
-    //  hit the LLM
-    // single invoke replaces formatMessages + llm.invoke separately
     const llmResponse = await chain.invoke({
-      webSearchResults: webSearchResults,
+      webSearchResults: webContentsArray,
       userQuery: query,
     });
 
-    // llmResponse is now a clean JS object: { answer: "...", followUps: [...] }
-    //  stream back the response
-    // Send follow ups question
+    // ✅ STEP 6: Save to Redis before returning (TTL: 1 hour)
+    const responseToCache = { llmResponse, sources: sourcesArray };
+    await redis.set(cacheKey, JSON.stringify(responseToCache), 'EX', 3600);
+    console.log('Response cached ✅');
+
     return res
       .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          { llmResponse, sources },
-          'AI responded successfully',
-        ),
-      );
+      .json(new ApiResponse(200, responseToCache, 'AI responded successfully'));
   } catch (error) {
-    console.error('Internal Server Error at purplexity_ask ', error.message);
+    console.error('Internal Server Error at /ask ', error.message);
     return res
       .status(500)
-      .json(new ApiError(500, 'Internal Server Error at purplexity_ask'));
+      .json(new ApiError(500, 'Internal Server Error at /ask'));
   }
 };
 
-// Ask follow up questions
-const purplexity_ask_followup = async (req, res) => {};
-
-// get past conversations
+const ask_followup = async (req, res) => {};
 const getConversations = async (req, res) => {};
-
-// get past conversation
 const getConversation = async (req, res) => {};
 
-export {
-  purplexity_ask,
-  purplexity_ask_followup,
-  getConversations,
-  getConversation,
-};
+export { ask, ask_followup, getConversations, getConversation };
