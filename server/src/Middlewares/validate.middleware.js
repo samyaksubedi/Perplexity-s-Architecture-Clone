@@ -1,25 +1,23 @@
 import { ApiError } from '../UTILS/API/error.api.js';
 
-const validate = (schema) => {
-  // takes a schema
+const validate = (schema, source = 'body') => {
   return async (req, res, next) => {
-    // returns a middleware function
-    const result = schema.safeParse(req.body);
+    const result = schema.safeParse(req[source]); // req.body or req.params or req.query
 
     if (!result.success) {
       return res.status(400).json(
         new ApiError(
           400,
-          'Error validating the req body',
-          result.error.issues.map((e) => {
-            return { path: e.path, message: e.message };
-          }),
-          //   result.error.issues,
+          `Error validating req.${source}`,
+          result.error.issues.map((e) => ({
+            path: e.path,
+            message: e.message,
+          })),
         ),
       );
     }
 
-    req.body = result.data;
+    req[source] = result.data;
     next();
   };
 };

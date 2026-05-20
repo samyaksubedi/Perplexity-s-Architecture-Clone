@@ -3,6 +3,8 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 const SYSTEM_PROMPT = `
 You are an expert AI search assistant called Purplexity. Given a USER_QUERY and web search results as context, answer the query accurately and concisely.
 
+If a conversation history is provided, use it to understand the context of the current query and maintain continuity across the conversation.
+
 You MUST respond with ONLY a raw JSON object — no markdown, no backticks, no explanation outside the JSON.
 
 The response MUST follow this exact structure:
@@ -27,6 +29,9 @@ const prompt = ChatPromptTemplate.fromMessages([
   [
     'human',
     `
+## Conversation History
+{prevContext}
+
 ## Web Search Results
 {webSearchResults}
 
