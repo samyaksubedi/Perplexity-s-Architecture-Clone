@@ -81,6 +81,12 @@ const ask = async (req, res) => {
         },
       });
 
+      // Bump conversation updatedAt → rises to top of sidebar
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {},
+      });
+
       // Return cached response with conversationId for client-side tracking
       return res
         .status(200)
@@ -163,6 +169,12 @@ Query: ${query}`,
       },
     });
 
+    // Bump conversation updatedAt → rises to top of sidebar
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {},
+    });
+
     // ─── 11. CACHE THE RESPONSE ───────────────────────────────────────────────
     // Store in Redis with 1 hour TTL
     // Next identical query skips the entire pipeline and returns instantly
@@ -173,19 +185,17 @@ Query: ${query}`,
     // ─── 12. RETURN RESPONSE ──────────────────────────────────────────────────
     // Always return conversationId so client can send follow-ups
     // against the same conversation
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          {
-            llmResponse,
-            sources: sourcesArray,
-            conversationId: conversation.id,
-          },
-          'AI responded successfully',
-        ),
-      );
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          llmResponse,
+          sources: sourcesArray,
+          conversationId: conversation.id,
+        },
+        'AI responded successfully',
+      ),
+    );
   } catch (error) {
     console.error('Internal Server Error at /ask ', error.message);
     return res
@@ -193,8 +203,73 @@ Query: ${query}`,
       .json(new ApiError(500, 'Internal Server Error at /ask'));
   }
 };
+// GET /conversations — sidebar list (lightweight, no messages)
+const getConversations = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const conversations = await prisma.conversation.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' }, // latest active conversation first
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true,
+        //  no messages — keeps response lightweight
+      },
+    });
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          conversations,
+          'Conversations fetched successfully',
+        ),
+      );
+  } catch (error) {
+    console.error('Internal Server Error at /conversations ', error.message);
+    return res
+      .status(500)
+      .json(new ApiError(500, 'Internal Server Error at /conversations'));
+  }
+};
 
-const getConversations = async (req, res) => {};
-const getConversation = async (req, res) => {};
+// GET /conversation/:id — full messages when user clicks a conversation
+const getConversation = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
 
+    // Validate conversation exists and belongs to this user
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' }, // oldest first → natural chat order
+        },
+      },
+    });
+
+    if (!conversation) {
+      return res.status(404).json(new ApiError(404, 'Conversation not found'));
+    }
+
+    // Prevent user from accessing another user's conversation
+    if (conversation.userId !== userId) {
+      return res.status(403).json(new ApiError(403, 'Unauthorized'));
+    }
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, conversation, 'Conversation fetched successfully'),
+      );
+  } catch (error) {
+    console.error('Internal Server Error at /conversation/:id ', error.message);
+    return res
+      .status(500)
+      .json(new ApiError(500, 'Internal Server Error at /conversation/:id'));
+  }
+};
 export { ask, getConversations, getConversation };
